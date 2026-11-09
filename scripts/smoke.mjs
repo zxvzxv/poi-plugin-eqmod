@@ -1,0 +1,10 @@
+import { createRequire } from "node:module";
+import { existsSync } from "node:fs";
+const require = createRequire(import.meta.url);
+require.extensions[".css"] = () => {};
+const plugin = require("../dist/index.js");
+const component = plugin.reactClass;
+const isReactComponent = typeof component === "function" || (component != null && typeof component === "object" && component.$$typeof);
+if (!isReactComponent || plugin.windowMode !== true || !plugin.windowOptions) throw new Error("插件入口导出不完整");
+if (!existsSync(new URL("../dist/data/improvements.json", import.meta.url))) throw new Error("dist 数据库不存在");
+console.log("入口冒烟测试通过");
