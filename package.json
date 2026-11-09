@@ -2,10 +2,20 @@
   "name": "poi-plugin-eqmod",
   "version": "0.1.0",
   "description": "Poi equipment improvement recipe viewer",
+  "license": "MIT",
+  "author": {
+    "name": "zxvzxv",
+    "url": "https://github.com/zxvzxv"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zxvzxv/poi-plugin-eqmod.git"
+  },
   "main": "dist/index.js",
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "clean": "node scripts/clean.mjs",
