@@ -6,6 +6,6 @@ Poi 12.0+ 版本的装备改修插件，改修数据从wikiwiki.jp获取，增�
 目前还没有设定改修目标的模块，后续再加
 
 ## 使用
-poi里面手动搜索"poi-plugin-eqmod"安装
+poi里面手动搜索"poi-plugin-eqmod"安装, 可能要重启poi才能正常加载
 
 
