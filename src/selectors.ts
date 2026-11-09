@@ -1,5 +1,5 @@
 import databaseJson from "./data/improvements.json";
-import type { EquipmentRecipe, ImprovementDatabase, OwnedEquipment, PoiState, SlotItemInstance } from "./types";
+import type { EquipmentRecipe, EquipmentTypeOption, ImprovementDatabase, OwnedEquipment, PoiState, SlotItemInstance } from "./types";
 
 export const database = databaseJson as ImprovementDatabase;
 
@@ -81,4 +81,37 @@ export function selectEquipmentIcons(state: PoiState): Map<number | string, numb
     icons.set(normalizeEquipmentName(master.api_name), iconId);
   });
   return icons;
+}
+
+export const EQUIPMENT_CATEGORY_ROWS = [
+  ["小口径主砲", "中口径主砲", "大口径主砲", "副砲"],
+  ["艦上戦闘機", "艦上爆撃機", "艦上攻撃機", "艦上偵察機", "水上戦闘機", "水上偵察機", "水上爆撃機", "対潜哨戒機", "回転翼機", "局地戦闘機", "陸軍戦闘機", "陸上攻撃機"],
+  ["魚雷", "爆雷", "ソナー", "電探", "対空機銃", "対空強化弾", "対艦強化弾", "高射装置", "探照灯", "発煙装置"],
+  ["増設バルジ", "機関部強化", "航空要員", "熟練見張員", "戦闘糧食", "上陸用舟艇・特型内火艇", "潜水艦装備", "対地装備", "司令部施設"],
+] as const;
+
+const categoryPlacement = new Map<string, { row: number; index: number }>(EQUIPMENT_CATEGORY_ROWS.flatMap((row, rowIndex) => row.map((name, index) => [name, { row: rowIndex, index }])));
+
+export function selectEquipmentTypeOptions(items: OwnedEquipment[]): EquipmentTypeOption[] {
+  const grouped = new Map<string, OwnedEquipment[]>();
+  items.forEach((item) => {
+    const category = item.recipe.category;
+    if (!category) return;
+    const group = grouped.get(category) ?? [];
+    group.push(item);
+    grouped.set(category, group);
+  });
+
+  const options: EquipmentTypeOption[] = [];
+  grouped.forEach((owned, category) => {
+    const placement = categoryPlacement.get(category) ?? { row: EQUIPMENT_CATEGORY_ROWS.length, index: Number.MAX_SAFE_INTEGER };
+    const representative = owned.filter((item) => item.type[3] != null).sort((left, right) => left.id - right.id)[0];
+    options.push({ id: category, name: category, iconId: representative?.type[3], row: placement.row });
+  });
+  options.sort((left, right) => {
+    const leftPlace = categoryPlacement.get(left.id) ?? { row: left.row, index: Number.MAX_SAFE_INTEGER };
+    const rightPlace = categoryPlacement.get(right.id) ?? { row: right.row, index: Number.MAX_SAFE_INTEGER };
+    return leftPlace.row - rightPlace.row || leftPlace.index - rightPlace.index || left.name.localeCompare(right.name, "ja");
+  });
+  return options;
 }

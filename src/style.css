@@ -18,7 +18,18 @@
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
 }
 .poi-plugin-eqmod *, .poi-plugin-eqmod *::before, .poi-plugin-eqmod *::after { box-sizing: border-box; }
-.poi-plugin-eqmod .eqmod-weekdays { position: sticky; top: 0; z-index: 5; padding: 8px 14px; overflow-x: auto; background: #323232; border-bottom: 1px solid var(--eq-border); }
+.poi-plugin-eqmod .eqmod-toolbar { position: sticky; top: 0; z-index: 5; background: #323232; }
+.poi-plugin-eqmod .eqmod-types { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 8px 14px; border-bottom: 1px solid var(--eq-border); }
+.poi-plugin-eqmod .eqmod-type-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.poi-plugin-eqmod .eqmod-type-all, .poi-plugin-eqmod .eqmod-type-button { display: inline-flex; align-items: center; justify-content: center; height: 32px; margin: 0; padding: 0 8px; border: 0; border-radius: 0; background: transparent; color: inherit; font: inherit; line-height: 1; cursor: pointer; }
+.poi-plugin-eqmod .eqmod-type-button { gap: 0; padding-left: 2px; }
+.poi-plugin-eqmod .eqmod-type-all:hover, .poi-plugin-eqmod .eqmod-type-button:hover { background: rgba(143, 153, 168, .15); }
+.poi-plugin-eqmod .eqmod-type-all.is-active, .poi-plugin-eqmod .eqmod-type-button.is-active { background: rgba(143, 153, 168, .3); }
+.poi-plugin-eqmod .eqmod-type-icon-wrap, .poi-plugin-eqmod .eqmod-type-name { display: inline-flex; align-items: center; justify-content: center; height: 28px; margin: 0; padding: 0; }
+.poi-plugin-eqmod .eqmod-type-icon-wrap { width: 28px; flex: 0 0 28px; }
+.poi-plugin-eqmod .eqmod-type-icon, .poi-plugin-eqmod .eqmod-type-icon-placeholder, .poi-plugin-eqmod .eqmod-type-button img { width: 28px; height: 28px; margin: 0; display: block; object-fit: contain; }
+.poi-plugin-eqmod .eqmod-type-name { line-height: 1; white-space: nowrap; }
+.poi-plugin-eqmod .eqmod-weekdays { padding: 8px 14px; overflow-x: auto; background: #323232; border-bottom: 1px solid var(--eq-border); }
 .poi-plugin-eqmod .eqmod-weekdays .bp5-button-group { display: flex; min-width: max-content; justify-content: center; }
 .poi-plugin-eqmod .eqmod-weekdays .bp5-button { min-width: 82px; border-radius: 0; }
 .poi-plugin-eqmod .eqmod-list { padding: 10px 14px 18px; }
@@ -28,8 +39,8 @@
 .poi-plugin-eqmod .eqmod-chevron { color: #6fb6f2; }
 .poi-plugin-eqmod .eqmod-equipment-name { min-width: 0; display: flex; align-items: center; gap: 0; }
 .poi-plugin-eqmod .eqmod-equipment-name strong { min-width: 0; overflow-wrap: anywhere; }
-.poi-plugin-eqmod .eqmod-equipment-icon-wrap { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; }
-.poi-plugin-eqmod .eqmod-equipment-icon, .poi-plugin-eqmod .eqmod-equipment-icon-placeholder { width: 28px; height: 28px; display: block; object-fit: contain; image-rendering: auto; }
+.poi-plugin-eqmod .eqmod-equipment-icon-wrap { width: 28px; height: 28px; min-width: 28px; max-width: 28px; display: inline-flex; flex: 0 0 28px; align-items: center; justify-content: center; overflow: hidden; }
+.poi-plugin-eqmod .eqmod-equipment-icon, .poi-plugin-eqmod .eqmod-equipment-icon-placeholder, .poi-plugin-eqmod .eqmod-equipment-icon-wrap img { width: 28px !important; height: 28px !important; min-width: 0 !important; max-width: 28px !important; max-height: 28px !important; margin: 0 !important; display: block; object-fit: contain; image-rendering: auto; }
 .poi-plugin-eqmod .eqmod-inline-equipment-icon-wrap, .poi-plugin-eqmod .eqmod-material-icon-wrap { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; vertical-align: middle; }
 .poi-plugin-eqmod .eqmod-inline-equipment-icon-wrap, .poi-plugin-eqmod .eqmod-inline-equipment-icon, .poi-plugin-eqmod .eqmod-inline-equipment-icon-placeholder { width: 22px; height: 22px; }
 .poi-plugin-eqmod .eqmod-material-icon-wrap, .poi-plugin-eqmod .eqmod-material-icon, .poi-plugin-eqmod .eqmod-material-icon-placeholder { width: 24px; height: 24px; }

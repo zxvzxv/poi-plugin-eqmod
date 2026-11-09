@@ -13,9 +13,17 @@ export interface EquipmentMaster {
   api_type?: number[];
 }
 
+export interface EquipTypeMaster {
+  api_id: number;
+  api_name: string;
+}
+
 export interface PoiState {
   info?: { equips?: Record<string, SlotItemInstance> };
-  const?: { $equips?: Record<string, EquipmentMaster> };
+  const?: {
+    $equips?: Record<string, EquipmentMaster>;
+    $equipTypes?: Record<string, EquipTypeMaster>;
+  };
 }
 
 export interface MaterialCost {
@@ -73,4 +81,11 @@ export interface OwnedEquipment {
   levels: Record<number, number>;
   materialCount: number;
   recipe: EquipmentRecipe;
+}
+
+export interface EquipmentTypeOption {
+  id: string;
+  name: string;
+  iconId?: number;
+  row: number;
 }

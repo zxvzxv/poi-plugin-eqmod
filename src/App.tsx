@@ -3,11 +3,20 @@ import { Button, ButtonGroup, Collapse, NonIdealState, Spinner } from "@blueprin
 import { connect } from "react-redux";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { normalizeEquipmentName, recipeAvailableOn, selectEquipmentIcons, selectMaterialCounts, selectOwnedRecipes } from "./selectors";
-import type { OwnedEquipment, PoiState, RecipeVariant } from "./types";
+import { normalizeEquipmentName, recipeAvailableOn, selectEquipmentIcons, selectEquipmentTypeOptions, selectMaterialCounts, selectOwnedRecipes } from "./selectors";
+import type { EquipmentTypeOption, OwnedEquipment, PoiState, RecipeVariant } from "./types";
 
-type SlotitemIconComponent = React.ComponentType<{ slotitemId: number; className?: string }>;
+type SlotitemIconComponent = React.ComponentType<{ slotitemId: number; className?: string; alt?: string }>;
 type MaterialIconComponent = React.ComponentType<{ materialId: number; className?: string }>;
+
+declare global {
+  var i18n: {
+    resources?: {
+      __?: (name: string, ...args: unknown[]) => string;
+    };
+  } | undefined;
+}
+
 let PoiSlotitemIcon: SlotitemIconComponent | null = null;
 let PoiMaterialIcon: MaterialIconComponent | null = null;
 try {
@@ -24,6 +33,27 @@ try {
 const WEEKDAYS = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
 const STAGES: Record<Exclude<RecipeVariant["stage"], "upgrade">, string> = { "0-5": "★0 ～ ★6", "6-9": "★6 ～ ★MAX" };
 const STAGE_ORDER: Record<RecipeVariant["stage"], number> = { "0-5": 0, "6-9": 1, upgrade: 2 };
+
+function translateGameName(name: string): string {
+  const translate = globalThis.i18n?.resources?.__;
+  if (typeof translate !== "function") return name;
+  try {
+    const translated = translate(name);
+    return typeof translated === "string" && translated.length > 0 ? translated : name;
+  } catch {
+    return name;
+  }
+}
+
+function TypeIcon({ iconId }: { iconId: number | undefined }) {
+  return (
+    <span className="eqmod-type-icon-wrap" data-type-icon={iconId ?? ""}>
+      {iconId != null && PoiSlotitemIcon
+        ? <PoiSlotitemIcon slotitemId={iconId} className="eqmod-type-icon" alt="" />
+        : <span className="eqmod-type-icon-placeholder" />}
+    </span>
+  );
+}
 
 function EquipmentTypeIcon({ item }: { item: OwnedEquipment }) {
   const iconId = item.type[3];
@@ -87,6 +117,7 @@ interface StateProps {
   items: OwnedEquipment[];
   materialCounts: Map<number | string, number>;
   equipmentIcons: Map<number | string, number>;
+  equipmentTypes: EquipmentTypeOption[];
 }
 
 function CostPair({ value }: { value: { normal: number; guaranteed: number | null } }) {
@@ -175,38 +206,75 @@ function EquipmentPanel({ item, open, onToggle, weekday, inventory, equipmentIco
   );
 }
 
-export function EqmodApp({ ready, items, materialCounts, equipmentIcons }: StateProps) {
+export function EqmodApp({ ready, items, materialCounts, equipmentIcons, equipmentTypes = [] }: StateProps) {
   const [weekday, setWeekday] = useState<number | null>(() => new Date().getDay());
+  const [equipmentType, setEquipmentType] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
-  const visible = useMemo(() => items.filter((item) => recipeAvailableOn(item.recipe, weekday)), [items, weekday]);
+  const activeType = equipmentTypes.some((type) => type.id === equipmentType) ? equipmentType : null;
+  const typeRows = useMemo(() => {
+    const rows: EquipmentTypeOption[][] = [];
+    equipmentTypes.forEach((type) => {
+      const row = rows[type.row] ?? [];
+      row.push(type);
+      rows[type.row] = row;
+    });
+    if (equipmentTypes.length > 0) rows[0] ??= [];
+    return rows.filter((row) => row.length > 0 || row === rows[0]);
+  }, [equipmentTypes]);
+  const visible = useMemo(
+    () => items.filter((item) => (activeType == null || item.recipe.category === activeType) && recipeAvailableOn(item.recipe, weekday)),
+    [items, weekday, activeType],
+  );
   const toggle = (id: number) => setExpanded((current) => {
     const next = new Set(current);
     next.has(id) ? next.delete(id) : next.add(id);
     return next;
   });
+  const emptyTitle = items.length === 0 ? "没有可显示的装备" : activeType == null ? "当天没有可改修装备" : "没有符合筛选的装备";
+  const emptyDescription = items.length === 0
+    ? "持有的装备中没有已收录的改修配方。"
+    : activeType == null ? "可切换星期或查看全部装备。" : "可切换星期、类型，或查看全部。";
 
   const stylesheet = <link rel="stylesheet" href={pathToFileURL(join(__dirname, "style.css")).href} />;
   if (!ready) return <main className="poi-plugin-eqmod">{stylesheet}<NonIdealState icon={<Spinner size={32} />} title="等待游戏数据" description="登录游戏并等待装备主数据加载完成。" /></main>;
   return (
     <main className="poi-plugin-eqmod bp5-dark">
       {stylesheet}
-      <nav className="eqmod-weekdays" aria-label="星期筛选">
-        <ButtonGroup minimal>
-          {WEEKDAYS.map((label, day) => <Button key={label} active={weekday === day} onClick={() => setWeekday(day)}>{label}</Button>)}
-          <Button active={weekday == null} onClick={() => setWeekday(null)}>全部装备</Button>
-        </ButtonGroup>
-      </nav>
+      <div className="eqmod-toolbar">
+        {equipmentTypes.length > 0 && <nav className="eqmod-types" aria-label="装备类型筛选">
+          {typeRows.map((row, index) => <div className="eqmod-type-row" key={row[0]?.id ?? "guns"}>
+            {index === 0 && <button type="button" className={`eqmod-type-all${activeType == null ? " is-active" : ""}`} aria-pressed={activeType == null} onClick={() => setEquipmentType(null)}>全部类型</button>}
+            {row.map((type) => <button
+              key={type.id}
+              type="button"
+              className={`eqmod-type-button${activeType === type.id ? " is-active" : ""}`}
+              aria-pressed={activeType === type.id}
+              onClick={() => setEquipmentType((current) => current === type.id ? null : type.id)}
+            ><TypeIcon iconId={type.iconId} /><span className="eqmod-type-name">{translateGameName(type.name)}</span></button>)}
+          </div>)}
+        </nav>}
+        <nav className="eqmod-weekdays" aria-label="星期筛选">
+          <ButtonGroup minimal>
+            {WEEKDAYS.map((label, day) => <Button key={label} active={weekday === day} onClick={() => setWeekday(day)}>{label}</Button>)}
+            <Button active={weekday == null} onClick={() => setWeekday(null)}>全部装备</Button>
+          </ButtonGroup>
+        </nav>
+      </div>
       <div className="eqmod-list">
         {visible.map((item) => <EquipmentPanel key={item.id} item={item} open={expanded.has(item.id)} onToggle={() => toggle(item.id)} weekday={weekday} inventory={materialCounts} equipmentIcons={equipmentIcons} />)}
-        {visible.length === 0 && <NonIdealState icon="search" title={items.length ? "当天没有可改修装备" : "没有可显示的装备"} description={items.length ? "可切换星期或查看全部装备。" : "持有的装备中没有已收录的改修配方。"} />}
+        {visible.length === 0 && <NonIdealState icon="search" title={emptyTitle} description={emptyDescription} />}
       </div>
     </main>
   );
 }
 
-const mapState = (state: PoiState): StateProps => ({
-  ...selectOwnedRecipes(state),
-  materialCounts: selectMaterialCounts(state),
-  equipmentIcons: selectEquipmentIcons(state),
-});
+const mapState = (state: PoiState): StateProps => {
+  const owned = selectOwnedRecipes(state);
+  return {
+    ...owned,
+    materialCounts: selectMaterialCounts(state),
+    equipmentIcons: selectEquipmentIcons(state),
+    equipmentTypes: selectEquipmentTypeOptions(owned.items),
+  };
+};
 export default connect(mapState)(EqmodApp);

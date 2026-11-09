@@ -2,7 +2,7 @@ import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { EqmodApp } from "./App";
-import type { OwnedEquipment } from "./types";
+import type { EquipmentTypeOption, OwnedEquipment } from "./types";
 
 const item: OwnedEquipment = {
   id: 1, name: "12.7cm連装砲", type: [0, 0, 1, 16], total: 2, levels: { 0: 1, 4: 1 }, materialCount: 1,
@@ -15,6 +15,19 @@ const item: OwnedEquipment = {
     ],
   },
 };
+
+const plane: OwnedEquipment = {
+  ...item,
+  id: 20,
+  name: "零式艦戦21型",
+  type: [0, 0, 6, 6],
+  recipe: { ...item.recipe, equipmentId: 20, wikiName: "零式艦戦21型", category: "艦上戦闘機", variants: item.recipe.variants.map((variant) => ({ ...variant, id: `plane-${variant.id}` })) },
+};
+
+const equipmentTypes: EquipmentTypeOption[] = [
+  { id: "小口径主砲", name: "小口径主砲", iconId: 16, row: 0 },
+  { id: "艦上戦闘機", name: "艦上戦闘機", iconId: 6, row: 1 },
+];
 
 describe("EqmodApp", () => {
   const equipmentIcons = new Map<number | string, number>([[1, 16], [2, 1]]);
@@ -54,5 +67,22 @@ describe("EqmodApp", () => {
       expect.stringContaining("★6 ～ ★MAX"),
       expect.stringContaining("12.7cm連装砲B型改二"),
     ]);
+  });
+
+  it("filters owned equipment by improvement category rows", () => {
+    const gun = { ...item, recipe: { ...item.recipe, category: "小口径主砲" } };
+    render(<EqmodApp ready items={[gun, plane]} materialCounts={new Map()} equipmentIcons={equipmentIcons} equipmentTypes={equipmentTypes} />);
+    fireEvent.click(screen.getByRole("button", { name: "全部装备" }));
+    const gunType = screen.getByRole("button", { name: "小口径主砲" });
+    const planeType = screen.getByRole("button", { name: "艦上戦闘機" });
+    expect(gunType.querySelector("[data-type-icon]")).toHaveAttribute("data-type-icon", "16");
+    expect(gunType.textContent).toBe("小口径主砲");
+    expect(planeType.textContent).toBe("艦上戦闘機");
+    expect(gunType.closest(".eqmod-type-row")).not.toBe(planeType.closest(".eqmod-type-row"));
+    fireEvent.click(gunType);
+    expect(screen.getByRole("button", { name: /12.7cm連装砲/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /零式艦戦21型/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "全部类型" }));
+    expect(screen.getByRole("button", { name: /零式艦戦21型/ })).toBeInTheDocument();
   });
 });
