@@ -1,8 +1,8 @@
 import * as cheerio from "cheerio";
-import { createHash } from "node:crypto";
 
-export const VALID_STAGES = new Set(["0-5", "6-9", "upgrade"]);
+export const VALID_STAGES = new Set(["0-5", "6-9", "max"]);
 const DAYS = ["日", "月", "火", "水", "木", "金", "土"];
+const CELL_BREAK = "\u001f";
 
 export function normalizeName(value) {
   return String(value ?? "").normalize("NFKC").replace(/[\s・･]/g, "").replace(/[（）]/g, (c) => c === "（" ? "(" : ")").toLowerCase();
@@ -13,7 +13,6 @@ const integer = (value) => {
   const match = clean(value).match(/\d+/);
   return match ? Number(match[0]) : 0;
 };
-const nullableInteger = (value) => /[-―—なし]/.test(clean(value)) && !/\d/.test(clean(value)) ? null : integer(value);
 
 export function expandTable($, table) {
   const grid = [];
@@ -24,7 +23,9 @@ export function expandTable($, table) {
       while (grid[rowIndex][column] !== undefined) column += 1;
       const rowspan = Math.max(1, Number($(cell).attr("rowspan")) || 1);
       const colspan = Math.max(1, Number($(cell).attr("colspan")) || 1);
-      const value = clean($(cell).text());
+      const clone = $(cell).clone();
+      clone.find("br").replaceWith(CELL_BREAK);
+      const value = clean(clone.text());
       for (let y = 0; y < rowspan; y += 1) {
         grid[rowIndex + y] ??= [];
         for (let x = 0; x < colspan; x += 1) grid[rowIndex + y][column + x] = value;
@@ -38,7 +39,7 @@ export function expandTable($, table) {
 
 function stageOf(value) {
   const text = clean(value).toUpperCase();
-  if (/更新|MAX.*(?:更新|→)|★MAX/.test(text) && !/6.*MAX/.test(text)) return "upgrade";
+  if (/更新|MAX.*(?:更新|→)|★MAX/.test(text) && !/6.*MAX/.test(text)) return "max";
   if (/6.*(?:9|MAX)|^★\s*6(?:\s*[～~\-].*)?$/.test(text)) return "6-9";
   return "0-5";
 }
@@ -49,29 +50,34 @@ function weekdaysOf(text) {
   return DAYS.flatMap((day, index) => normalized.includes(day) || normalized.includes(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][index]) ? [index] : []);
 }
 
-function pairOf(text) {
-  const values = clean(text).match(/\d+/g)?.map(Number) ?? [];
-  return { normal: values[0] ?? 0, guaranteed: values[1] ?? (values[0] ?? null) };
+function pairText(value) {
+  const values = clean(value).match(/\d+/g) ?? [];
+  return values.length > 1 ? `${values[0]}/${values[1]}` : (values[0] ?? "0");
+}
+
+function materialText(value, equipmentName) {
+  const text = clean(value).split(CELL_BREAK).map(clean).filter(Boolean).join(" ");
+  if (!text || /^(?:[-―—]|不要)$/.test(text)) return "なし";
+  return text.replace(/同装備/g, equipmentName).replace(/\s*[×X]\s*/gi, "x");
+}
+
+function updateText(value) {
+  const text = clean(value).replace(/^[⇒→]+/, "");
+  const withoutNote = text.split(new RegExp(`${CELL_BREAK}+\\s*※|${CELL_BREAK}{2,}`), 1)[0];
+  return withoutNote.split(CELL_BREAK).map(clean).filter(Boolean).join(" / ") || "更新不可";
+}
+
+function weekdayMask(values) {
+  return values.map((value) => /◯|○|〇/.test(value) ? "1" : "0").join("");
+}
+
+function mergeMask(left = "0000000", right = "0000000") {
+  return DAYS.map((_day, index) => left[index] === "1" || right[index] === "1" ? "1" : "0").join("");
 }
 
 function headerIndex(headers, patterns, fallback) {
   const found = headers.findIndex((header) => patterns.some((pattern) => pattern.test(header)));
   return found < 0 ? fallback : found;
-}
-
-function parseMaterials(text, masterByName, currentName = "") {
-  const value = clean(text);
-  if (!value || /^(?:[-―—]|なし|不要)$/.test(value)) return [];
-  const compactMatches = [...value.matchAll(/(.+?)[x×](\d+)(?=(?:.+?)[x×]\d+|$)/gi)];
-  const parts = compactMatches.length ? compactMatches.map((match) => `${match[1]} x${match[2]}`) : value.split(/[、,+＋]/);
-  return parts.map((part) => {
-    const countMatch = part.match(/(?:x|×|\*)\s*(\d+)|(\d+)\s*(?:個|基|機|門)/i);
-    const count = Number(countMatch?.[1] ?? countMatch?.[2] ?? 1);
-    const parsedName = clean(part.replace(/(?:x|×|\*)\s*\d+|\d+\s*(?:個|基|機|門)/gi, ""));
-    const name = /^(?:同装備|同装备)$/.test(parsedName) ? currentName : parsedName;
-    const master = masterByName.get(normalizeName(name));
-    return { ...(master ? { equipmentId: master.api_id } : {}), name, count, ...(!master && /資材|詳報|熟練搭乗員|航空兵装/.test(name) ? { special: true } : {}) };
-  }).filter((item) => item.name);
 }
 
 function resourcesOf(text) {
@@ -91,9 +97,8 @@ function resourcesOf(text) {
   };
 }
 
-export function parseWikiHtml(html, equipmentMaster = []) {
+export function parseWikiHtml(html, _equipmentMaster = []) {
   const $ = cheerio.load(html);
-  const masterByName = new Map(equipmentMaster.map((item) => [normalizeName(item.api_name), item]));
   const equipment = [];
   const categories = new Set();
   const anchors = new Map();
@@ -117,7 +122,7 @@ export function parseWikiHtml(html, equipmentMaster = []) {
       name: headerIndex(headers, [/装備名|装備名称|改修する装備/], 0), stage: headerIndex(headers, [/改修段階|改修値|段階|★/], 1),
       fuel: headerIndex(headers, [/燃料|燃$/], 2), ammo: headerIndex(headers, [/弾薬|弾$/], 3),
       steel: headerIndex(headers, [/鋼材|鋼$/], 4), bauxite: headerIndex(headers, [/ボーキ|铝|ボ$/], 5),
-      development: headerIndex(headers, [/開発資材|开发资材/], 6), improvement: headerIndex(headers, [/改修資材|ネジ|改修/], 7),
+      development: headerIndex(headers, [/開発\s*資材|开发资材/], 6), improvement: headerIndex(headers, [/改修\s*資材|ネジ/], 7),
       materials: headerIndex(headers, [/消費装備|必要装備|素材/], 8), weekdays: headerIndex(headers, [/曜日/], 9),
       secretary: headerIndex(headers, [/二番艦|担当艦|秘書艦/], 10), upgrade: headerIndex(headers, [/更新先|更新装備/], 11),
     };
@@ -125,71 +130,91 @@ export function parseWikiHtml(html, equipmentMaster = []) {
     categories.add(category);
     tableStats.push({ tableIndex, columns: grid[headerRow].length, rows: grid.length - headerRow - 1 });
     let lastName = "";
-    for (const [rowOffset, row] of grid.slice(headerRow + 1).entries()) {
+    for (const row of grid.slice(headerRow + 1)) {
       if (wiki16 && /改修値/.test(row[1])) continue;
       const suppliedName = clean(row[indexes.name]);
       const name = suppliedName || lastName;
       if (!name || /装備名|備考|注[:：]?/.test(name)) continue;
       lastName = name;
-      const master = masterByName.get(normalizeName(name));
       const anchorNode = $(table).find(`[id]`).filter((_i, node) => normalizeName($(node).text()).includes(normalizeName(name))).first();
       const anchor = anchorNode.attr("id") || undefined;
       if (anchor) anchors.set(anchor, (anchors.get(anchor) ?? 0) + 1);
-      const rawWeekdays = row[indexes.weekdays] ?? "";
-      const upgradeName = clean(row[indexes.upgrade]);
-      const variant = {
-        id: `${master?.api_id ?? normalizeName(name)}-${tableIndex}-${rowOffset}-${stageOf(row[indexes.stage])}`,
-        stage: stageOf(row[indexes.stage]),
-        resources: wiki16 ? resourcesOf(row[2]) : { fuel: integer(row[indexes.fuel]), ammo: integer(row[indexes.ammo]), steel: integer(row[indexes.steel]), bauxite: integer(row[indexes.bauxite]) },
-        development: pairOf(row[wiki16 ? 3 : indexes.development]), improvement: pairOf(row[wiki16 ? 4 : indexes.improvement]),
-        weekdays: wiki16 ? DAYS.map((_day, index) => /◯|○|〇/.test(row[7 + index]) ? index : -1).filter((day) => day >= 0) : weekdaysOf(rawWeekdays),
-        ...( /条件|※/.test(wiki16 ? row.slice(7, 14).join("") : rawWeekdays) ? { weekdayConditional: true } : {}),
-        secretary: clean(row[wiki16 ? 14 : indexes.secretary]).split(/[、,/／]/).map(clean).filter((value) => value && value !== "-"),
-        materials: parseMaterials(row[wiki16 ? 5 : indexes.materials], masterByName, name),
-        ...(() => {
-          const target = clean(row[wiki16 ? 15 : indexes.upgrade]).replace(/^[⇒→]+/, "");
-          if (!target || /^(?:[-―—]|なし|更新不可)$/.test(target)) return {};
-          const targetMaster = masterByName.get(normalizeName(target));
-          return { upgradeTo: { ...(targetMaster ? { equipmentId: targetMaster.api_id } : {}), name: target } };
-        })(),
-        notes: row.filter((value) => /※|要熟練|新型/.test(value)).map(clean), sourceText: row.map(clean),
-      };
       const normalizedName = normalizeName(name);
       let recipe = equipment.find((item) => item.normalizedName === normalizedName);
       if (!recipe) {
-        recipe = { ...(master ? { equipmentId: master.api_id } : {}), wikiName: name, normalizedName, ...(anchor ? { anchor } : {}), category, variants: [] };
+        const resources = wiki16
+          ? resourcesOf(row[2])
+          : { fuel: integer(row[indexes.fuel]), ammo: integer(row[indexes.ammo]), steel: integer(row[indexes.steel]), bauxite: integer(row[indexes.bauxite]) };
+        recipe = { wikiName: name, normalizedName, category, res: [resources.fuel, resources.ammo, resources.steel, resources.bauxite], variants: [] };
         equipment.push(recipe);
       }
-      recipe.variants.push(variant);
+
+      const stage = stageOf(row[indexes.stage]);
+      const rank = { "0-5": 0, "6-9": 1, max: 2 }[stage];
+      const stageValue = [
+        pairText(row[wiki16 ? 3 : indexes.development]),
+        pairText(row[wiki16 ? 4 : indexes.improvement]),
+        materialText(row[wiki16 ? 5 : indexes.materials], name),
+      ];
+      const update = updateText(row[wiki16 ? 15 : indexes.upgrade]);
+      let variant = recipe.variants.at(-1);
+      const existingStage = variant?.stages[stage];
+      const startsNextBranch = variant && (
+        rank < variant._lastStageRank
+        || (existingStage && JSON.stringify(existingStage) !== JSON.stringify(stageValue))
+        || variant._update !== update
+      );
+      if (!variant || startsNextBranch) {
+        const inheritedStages = variant && rank >= variant._lastStageRank
+          ? Object.fromEntries(Object.entries(variant.stages).filter(([key]) => ({ "0-5": 0, "6-9": 1, max: 2 })[key] < rank))
+          : {};
+        variant = { sub_ships: {}, stages: inheritedStages, _lastStageRank: rank - 1, _update: update };
+        recipe.variants.push(variant);
+      }
+      variant.stages[stage] ??= stageValue;
+      variant._lastStageRank = Math.max(variant._lastStageRank, rank);
+
+      const rawWeekdays = row[indexes.weekdays] ?? "";
+      const mask = wiki16
+        ? weekdayMask(row.slice(7, 14))
+        : DAYS.map((_day, index) => weekdaysOf(rawWeekdays).includes(index) ? "1" : "0").join("");
+      const secretaries = clean(row[wiki16 ? 14 : indexes.secretary])
+        .split(new RegExp(`[${CELL_BREAK}、,/／]`))
+        .map(clean)
+        .filter((value) => value && value !== "-");
+      for (const secretary of secretaries) variant.sub_ships[secretary] = mergeMask(variant.sub_ships[secretary], mask);
     }
   });
-  return { equipment, categories: [...categories], unmatched: equipment.filter((item) => item.equipmentId == null).map((item) => item.wikiName), tableStats, tablePreviews, duplicateAnchors: [...anchors].filter(([, count]) => count > 1).map(([anchor]) => anchor) };
+  for (const item of equipment) for (const variant of item.variants) {
+    variant.stages.update = variant._update;
+    delete variant._lastStageRank;
+    delete variant._update;
+  }
+  return { equipment, categories: [...categories], unmatched: [], tableStats, tablePreviews, duplicateAnchors: [...anchors].filter(([, count]) => count > 1).map(([anchor]) => anchor) };
 }
 
 export function validateDatabase(database, options = {}) {
   const errors = [];
   const minimumEquipment = options.minimumEquipment ?? 1;
-  if (database.schemaVersion !== 1) errors.push("schemaVersion 必须为 1");
   if (!Array.isArray(database.equipment) || database.equipment.length < minimumEquipment) errors.push(`装备数量少于 ${minimumEquipment}`);
-  const ids = new Set();
   for (const item of database.equipment ?? []) {
-    if (!item.wikiName || !item.normalizedName || !Array.isArray(item.variants) || item.variants.length === 0) errors.push(`装备记录不完整: ${item.wikiName ?? "(未知)"}`);
+    if (!item.wikiName || !item.normalizedName || !item.category || !Array.isArray(item.res) || item.res.length !== 4 || !Array.isArray(item.variants) || item.variants.length === 0) errors.push(`装备记录不完整: ${item.wikiName ?? "(未知)"}`);
     for (const variant of item.variants ?? []) {
-      if (!VALID_STAGES.has(variant.stage)) errors.push(`未知阶段: ${variant.stage}`);
-      if (ids.has(variant.id)) errors.push(`重复配方 ID: ${variant.id}`);
-      ids.add(variant.id);
-      if (!variant.resources || !variant.development || !variant.improvement || !Array.isArray(variant.weekdays)) errors.push(`配方字段不完整: ${variant.id}`);
+      if (!variant.sub_ships || !variant.stages || typeof variant.stages.update !== "string") errors.push(`配方字段不完整: ${item.wikiName}`);
+      for (const [stage, value] of Object.entries(variant.stages ?? {})) {
+        if (stage === "update") continue;
+        if (!VALID_STAGES.has(stage) || !Array.isArray(value) || value.length !== 3) errors.push(`未知或无效阶段: ${item.wikiName}/${stage}`);
+      }
+      for (const [ship, mask] of Object.entries(variant.sub_ships ?? {})) if (!/^[01]{7}$/.test(mask)) errors.push(`二号舰日期无效: ${item.wikiName}/${ship}`);
     }
   }
   if (errors.length) throw new Error(errors.join("\n"));
   return database;
 }
 
-export function makeDatabase(html, parsed, metadata = {}) {
+export function makeDatabase(_html, parsed, metadata = {}) {
   return validateDatabase({
-    schemaVersion: 1,
-    source: { url: metadata.url ?? "", pageUpdatedAt: metadata.pageUpdatedAt ?? null, etag: metadata.etag ?? null, sha256: createHash("sha256").update(html).digest("hex") },
-    generatedAt: metadata.generatedAt ?? new Date().toISOString(), categories: parsed.categories, equipment: parsed.equipment, unmatched: parsed.unmatched,
+    equipment: parsed.equipment,
   }, { minimumEquipment: metadata.minimumEquipment ?? 1 });
 }
 
@@ -199,5 +224,5 @@ export function diffDatabases(before, after) {
   const added = [...newItems].filter(([name]) => !oldItems.has(name)).map(([, item]) => item.wikiName);
   const removed = [...oldItems].filter(([name]) => !newItems.has(name)).map(([, item]) => item.wikiName);
   const changed = [...newItems].filter(([name, item]) => oldItems.has(name) && JSON.stringify(oldItems.get(name)) !== JSON.stringify(item)).map(([, item]) => item.wikiName);
-  return { added, removed, changed, unmatched: after.unmatched };
+  return { added, removed, changed, unmatched: after.unmatched ?? [] };
 }

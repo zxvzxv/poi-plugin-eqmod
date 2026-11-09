@@ -26,51 +26,28 @@ export interface PoiState {
   };
 }
 
-export interface MaterialCost {
-  equipmentId?: number;
-  name: string;
-  count: number;
-  special?: boolean;
-}
-
-export interface ResourceCost {
-  fuel: number;
-  ammo: number;
-  steel: number;
-  bauxite: number;
-}
+export type StageCost = [development: string, improvement: string, materials: string];
 
 export interface RecipeVariant {
-  id: string;
-  stage: "0-5" | "6-9" | "upgrade";
-  resources: ResourceCost;
-  development: { normal: number; guaranteed: number | null };
-  improvement: { normal: number; guaranteed: number | null };
-  weekdays: Weekday[];
-  weekdayConditional?: boolean;
-  secretary: string[];
-  materials: MaterialCost[];
-  upgradeTo?: { equipmentId?: number; name: string };
-  notes: string[];
-  sourceText: string[];
+  sub_ships: Record<string, string>;
+  stages: {
+    "0-5"?: StageCost;
+    "6-9"?: StageCost;
+    max?: StageCost;
+    update: string;
+  };
 }
 
 export interface EquipmentRecipe {
-  equipmentId?: number;
   wikiName: string;
   normalizedName: string;
-  anchor?: string;
   category: string;
+  res: [fuel: number, ammo: number, steel: number, bauxite: number];
   variants: RecipeVariant[];
 }
 
 export interface ImprovementDatabase {
-  schemaVersion: 1;
-  source: { url: string; pageUpdatedAt: string | null; etag: string | null; sha256: string };
-  generatedAt: string;
-  categories: string[];
   equipment: EquipmentRecipe[];
-  unmatched: string[];
 }
 
 export interface OwnedEquipment {

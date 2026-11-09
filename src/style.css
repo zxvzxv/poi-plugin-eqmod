@@ -46,11 +46,16 @@
 .poi-plugin-eqmod .eqmod-material-icon-wrap, .poi-plugin-eqmod .eqmod-material-icon, .poi-plugin-eqmod .eqmod-material-icon-placeholder { width: 24px; height: 24px; }
 .poi-plugin-eqmod .eqmod-levels { display: flex; flex-wrap: wrap; gap: 6px 14px; justify-content: flex-end; }
 .poi-plugin-eqmod .eqmod-total { color: var(--eq-muted); text-align: right; }
-.poi-plugin-eqmod .eqmod-recipe-head, .poi-plugin-eqmod .eqmod-recipe-row { min-width: 900px; display: grid; grid-template-columns: 170px 270px 105px 105px minmax(250px, 1fr); align-items: stretch; border-top: 1px solid var(--eq-border); }
+.poi-plugin-eqmod .eqmod-recipe-head { min-width: 900px; display: grid; grid-template-columns: 170px 270px 105px 105px minmax(250px, 1fr); align-items: stretch; border-top: 1px solid var(--eq-border); }
 .poi-plugin-eqmod .bp5-collapse-body { overflow-x: auto; }
 .poi-plugin-eqmod .eqmod-recipe-head { min-height: 58px; color: var(--eq-muted); background: #303030; font-size: 12px; }
-.poi-plugin-eqmod .eqmod-recipe-head > span, .poi-plugin-eqmod .eqmod-recipe-head > div, .poi-plugin-eqmod .eqmod-recipe-row > div { padding: 10px 12px; border-right: 1px solid var(--eq-border); }
+.poi-plugin-eqmod .eqmod-recipe-head > span, .poi-plugin-eqmod .eqmod-recipe-head > div { padding: 10px 12px; border-right: 1px solid var(--eq-border); }
 .poi-plugin-eqmod .eqmod-recipe-head > span { display: flex; align-items: center; font-weight: 600; }
+.poi-plugin-eqmod .eqmod-recipe-variant { min-width: 900px; display: grid; grid-template-columns: 170px minmax(730px, 1fr); align-items: stretch; border-top: 1px solid var(--eq-border); }
+.poi-plugin-eqmod .eqmod-recipe-variant > .eqmod-secretary { padding: 10px 12px; border-right: 1px solid var(--eq-border); }
+.poi-plugin-eqmod .eqmod-stage-row { display: grid; grid-template-columns: 270px 105px 105px minmax(250px, 1fr); align-items: stretch; }
+.poi-plugin-eqmod .eqmod-stage-row + .eqmod-stage-row { border-top: 1px solid var(--eq-border); }
+.poi-plugin-eqmod .eqmod-stage-row > div { padding: 10px 12px; border-right: 1px solid var(--eq-border); }
 .poi-plugin-eqmod .eqmod-secretary, .poi-plugin-eqmod .eqmod-cost, .poi-plugin-eqmod .eqmod-materials { display: flex; flex-direction: column; gap: 4px; justify-content: center; }
 .poi-plugin-eqmod .eqmod-secretary span { color: var(--eq-muted); font-size: 12px; }
 .poi-plugin-eqmod .eqmod-resources { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; align-items: center; color: var(--eq-text); font-size: 15px; font-weight: 600; }

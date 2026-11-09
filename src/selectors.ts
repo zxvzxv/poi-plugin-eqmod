@@ -15,7 +15,6 @@ export function selectOwnedRecipes(
   const masters = state.const?.$equips;
   if (!instances || !masters) return { ready: false, items: [] };
 
-  const recipesById = new Map(db.equipment.filter((x) => x.equipmentId != null).map((x) => [x.equipmentId!, x]));
   const recipesByName = new Map(db.equipment.map((x) => [x.normalizedName, x]));
   const grouped = new Map<number, SlotItemInstance[]>();
   Object.values(instances).forEach((item) => {
@@ -28,8 +27,8 @@ export function selectOwnedRecipes(
   grouped.forEach((owned, id) => {
     const master = masters[String(id)];
     if (!master) return;
-    // Wiki anchors and stale ID snapshots can be wrong; Poi's current official name is authoritative.
-    const recipe = recipesByName.get(normalizeEquipmentName(master.api_name)) ?? recipesById.get(id);
+    // Poi's current official name is authoritative when matching the wiki snapshot.
+    const recipe = recipesByName.get(normalizeEquipmentName(master.api_name));
     if (!recipe) return;
     const levels: Record<number, number> = {};
     owned.forEach(({ api_level = 0 }) => { levels[api_level] = (levels[api_level] ?? 0) + 1; });
@@ -49,7 +48,10 @@ export function selectOwnedRecipes(
 
 export function recipeAvailableOn(recipe: EquipmentRecipe, weekday: number | null): boolean {
   if (weekday == null) return true;
-  return recipe.variants.some((variant) => variant.weekdays.length === 0 || variant.weekdays.includes(weekday as 0 | 1 | 2 | 3 | 4 | 5 | 6));
+  return recipe.variants.some((variant) => {
+    const masks = Object.values(variant.sub_ships);
+    return masks.length === 0 || masks.some((mask) => mask[weekday] === "1");
+  });
 }
 
 export function materialInventory(items: OwnedEquipment[]): Map<number | string, number> {

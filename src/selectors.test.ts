@@ -3,11 +3,8 @@ import { normalizeEquipmentName, recipeAvailableOn, selectEquipmentIcons, select
 import type { ImprovementDatabase, PoiState } from "./types";
 
 const db: ImprovementDatabase = {
-  schemaVersion: 1,
-  source: { url: "test", pageUpdatedAt: null, etag: null, sha256: "test" }, generatedAt: "test", categories: ["test"], unmatched: [],
-  equipment: [{ equipmentId: 10, wikiName: "試製 砲", normalizedName: normalizeEquipmentName("試製 砲"), category: "test", variants: [{
-    id: "test", stage: "0-5", resources: { fuel: 1, ammo: 2, steel: 3, bauxite: 4 },
-    development: { normal: 1, guaranteed: 2 }, improvement: { normal: 1, guaranteed: 2 }, weekdays: [1], secretary: [], materials: [], notes: [], sourceText: [],
+  equipment: [{ wikiName: "試製 砲", normalizedName: normalizeEquipmentName("試製 砲"), category: "test", res: [1, 2, 3, 4], variants: [{
+    sub_ships: { "艦A": "0100000" }, stages: { "0-5": ["1/2", "1/2", "なし"], update: "更新不可" },
   }] }],
 };
 
@@ -85,7 +82,7 @@ describe("inventory selectors", () => {
       ...db,
       equipment: [
         db.equipment[0],
-        { ...db.equipment[0], equipmentId: 10, wikiName: "別の装備", normalizedName: normalizeEquipmentName("別の装備") },
+        { ...db.equipment[0], wikiName: "別の装備", normalizedName: normalizeEquipmentName("別の装備") },
       ],
     };
     expect(selectOwnedRecipes(state, conflicting).items[0].recipe.wikiName).toBe("試製 砲");

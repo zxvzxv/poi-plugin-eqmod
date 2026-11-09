@@ -4,7 +4,7 @@ import { connect } from "react-redux";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { normalizeEquipmentName, recipeAvailableOn, selectEquipmentIcons, selectEquipmentTypeOptions, selectMaterialCounts, selectOwnedRecipes } from "./selectors";
-import type { EquipmentTypeOption, OwnedEquipment, PoiState, RecipeVariant } from "./types";
+import type { EquipmentTypeOption, OwnedEquipment, PoiState, RecipeVariant, StageCost } from "./types";
 
 type SlotitemIconComponent = React.ComponentType<{ slotitemId: number; className?: string; alt?: string }>;
 type MaterialIconComponent = React.ComponentType<{ materialId: number; className?: string }>;
@@ -31,8 +31,8 @@ try {
 }
 
 const WEEKDAYS = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
-const STAGES: Record<Exclude<RecipeVariant["stage"], "upgrade">, string> = { "0-5": "★0 ～ ★6", "6-9": "★6 ～ ★MAX" };
-const STAGE_ORDER: Record<RecipeVariant["stage"], number> = { "0-5": 0, "6-9": 1, upgrade: 2 };
+const STAGES = { "0-5": "★0 ～ ★6", "6-9": "★6 ～ ★MAX", max: "★MAX" } as const;
+type StageName = keyof typeof STAGES;
 
 function translateGameName(name: string): string {
   const translate = globalThis.i18n?.resources?.__;
@@ -93,11 +93,10 @@ function MaterialIcon({ materialId, label }: { materialId: number; label: string
 
 function resolveEquipmentIcon(
   equipmentIcons: Map<number | string, number>,
-  equipmentId: number | undefined,
   name: string,
 ): number | undefined {
   const normalizedName = normalizeEquipmentName(name);
-  const direct = equipmentIcons.get(equipmentId ?? normalizedName) ?? equipmentIcons.get(normalizedName);
+  const direct = equipmentIcons.get(normalizedName);
   if (direct != null) return direct;
 
   // Wiki target names can append improvement levels or footnotes after the official name.
@@ -120,49 +119,79 @@ interface StateProps {
   equipmentTypes: EquipmentTypeOption[];
 }
 
-function CostPair({ value }: { value: { normal: number; guaranteed: number | null } }) {
-  return <span>{value.normal}{value.guaranteed == null ? "" : `（${value.guaranteed}）`}</span>;
+function CostPair({ value }: { value: string }) {
+  const [normal, guaranteed] = value.split("/");
+  return <span>{normal}{guaranteed == null ? "" : `（${guaranteed}）`}</span>;
 }
 
-function RecipeRow({ variant, inventory, equipmentIcons }: {
-  variant: RecipeVariant;
+function parseMaterials(value: string): Array<{ name: string; count: number; special: boolean }> {
+  if (!value || value === "なし") return [];
+  return [...value.matchAll(/(.+?)x(\d+)(?:\s+|$)/g)].map((match) => ({
+    name: match[1].trim(),
+    count: Number(match[2]),
+    special: /資材|詳報|熟練搭乗員|航空兵装/.test(match[1]),
+  }));
+}
+
+function maskDays(mask: string): string {
+  if (mask === "1111111") return "每天";
+  return [...mask].flatMap((available, day) => available === "1" ? [WEEKDAYS[day].slice(2)] : []).join("、");
+}
+
+function RecipeStageRow({ update, stage, value, inventory, equipmentIcons }: {
+  update: string;
+  stage: StageName;
+  value: StageCost;
   inventory: Map<number | string, number>;
   equipmentIcons: Map<number | string, number>;
 }) {
-  const days = variant.weekdays.length === 7 || variant.weekdays.length === 0
-    ? "每天"
-    : variant.weekdays.map((day) => WEEKDAYS[day].slice(2)).join("、");
+  const materials = parseMaterials(value[2]);
   return (
-    <div className="eqmod-recipe-row" data-testid="recipe-variant">
-      <div className="eqmod-secretary">
-        <strong>{variant.secretary.length ? variant.secretary.join(" / ") : "任意"}</strong>
-        <span>{days}{variant.weekdayConditional ? "（条件）" : ""}</span>
-      </div>
-      <div className={`eqmod-stage ${variant.stage === "upgrade" ? "eqmod-stage-upgrade" : ""}`}>
-        {variant.stage === "upgrade" && variant.upgradeTo ? <>
+    <div className="eqmod-stage-row" data-testid="recipe-stage">
+      <div className={`eqmod-stage ${stage === "max" ? "eqmod-stage-upgrade" : ""}`}>
+        {stage !== "max" ? STAGES[stage] : update !== "更新不可" ? <>
           <InlineEquipmentIcon
-            iconId={resolveEquipmentIcon(equipmentIcons, variant.upgradeTo.equipmentId, variant.upgradeTo.name)}
-            label={variant.upgradeTo.name}
+            iconId={resolveEquipmentIcon(equipmentIcons, update)}
+            label={update}
           />
-          {variant.upgradeTo.name}
-        </> : variant.stage === "upgrade" ? "更新不可" : STAGES[variant.stage]}
+          {update}
+        </> : update}
       </div>
-      <div className="eqmod-cost"><CostPair value={variant.development} /></div>
-      <div className="eqmod-cost"><CostPair value={variant.improvement} /></div>
+      <div className="eqmod-cost"><CostPair value={value[0]} /></div>
+      <div className="eqmod-cost"><CostPair value={value[1]} /></div>
       <div className="eqmod-materials">
-        {variant.materials.length === 0 && <span className="eqmod-muted">无需消费装备</span>}
-        {variant.materials.map((material, index) => {
-          const available = material.special ? null : (inventory.get(material.equipmentId ?? normalizeEquipmentName(material.name)) ?? 0);
-          const iconId = resolveEquipmentIcon(equipmentIcons, material.equipmentId, material.name);
+        {materials.length === 0 && <span className="eqmod-muted">无需消费装备</span>}
+        {materials.map((material, index) => {
+          const available = material.special ? null : (inventory.get(normalizeEquipmentName(material.name)) ?? 0);
+          const iconId = resolveEquipmentIcon(equipmentIcons, material.name);
           return <span className="eqmod-material-line" key={`${material.name}-${index}`}>
             {material.count} × <InlineEquipmentIcon iconId={iconId} label={material.name} />
             {material.name}{available == null ? "" : `（持有: ${available}）`}
           </span>;
         })}
-        {variant.notes.map((note, index) => <small key={index}>{note}</small>)}
       </div>
     </div>
   );
+}
+
+function RecipeVariantBlock({ variant, inventory, equipmentIcons }: {
+  variant: RecipeVariant;
+  inventory: Map<number | string, number>;
+  equipmentIcons: Map<number | string, number>;
+}) {
+  const secretaries = Object.entries(variant.sub_ships);
+  return <div className="eqmod-recipe-variant" data-testid="recipe-variant">
+    <div className="eqmod-secretary">
+      {secretaries.length === 0 && <strong>任意</strong>}
+      {secretaries.map(([ship, mask]) => <span key={ship}><strong>{ship}</strong> {maskDays(mask)}</span>)}
+    </div>
+    <div className="eqmod-stage-rows">
+      {(["0-5", "6-9", "max"] as const).flatMap((stage) => {
+        const value = variant.stages[stage];
+        return value ? [<RecipeStageRow key={stage} update={variant.stages.update} stage={stage} value={value} inventory={inventory} equipmentIcons={equipmentIcons} />] : [];
+      })}
+    </div>
+  </div>;
 }
 
 function EquipmentPanel({ item, open, onToggle, weekday, inventory, equipmentIcons }: {
@@ -170,9 +199,8 @@ function EquipmentPanel({ item, open, onToggle, weekday, inventory, equipmentIco
   inventory: Map<number | string, number>; equipmentIcons: Map<number | string, number>;
 }) {
   const variants = item.recipe.variants
-    .filter((variant) => weekday == null || variant.weekdays.length === 0 || variant.weekdays.includes(weekday as 0 | 1 | 2 | 3 | 4 | 5 | 6))
-    .sort((left, right) => STAGE_ORDER[left.stage] - STAGE_ORDER[right.stage]);
-  const resources = variants[0]?.resources;
+    .filter((variant) => weekday == null || Object.values(variant.sub_ships).length === 0 || Object.values(variant.sub_ships).some((mask) => mask[weekday] === "1"));
+  const resources = item.recipe.res;
   const levels = Object.entries(item.levels).sort(([a], [b]) => Number(a) - Number(b));
   return (
     <section className={`eqmod-equipment ${open ? "is-open" : ""}`}>
@@ -191,16 +219,16 @@ function EquipmentPanel({ item, open, onToggle, weekday, inventory, equipmentIco
         <div className="eqmod-recipe-head">
           <span>二番舰 / 星期</span>
           <div className="eqmod-resources" aria-label="资源消耗">
-            <span className="fuel"><MaterialIcon materialId={1} label="燃" /> {resources?.fuel ?? 0}</span>
-            <span className="ammo"><MaterialIcon materialId={2} label="弹" /> {resources?.ammo ?? 0}</span>
-            <span className="steel"><MaterialIcon materialId={3} label="钢" /> {resources?.steel ?? 0}</span>
-            <span className="bauxite"><MaterialIcon materialId={4} label="铝" /> {resources?.bauxite ?? 0}</span>
+            <span className="fuel"><MaterialIcon materialId={1} label="燃" /> {resources[0]}</span>
+            <span className="ammo"><MaterialIcon materialId={2} label="弹" /> {resources[1]}</span>
+            <span className="steel"><MaterialIcon materialId={3} label="钢" /> {resources[2]}</span>
+            <span className="bauxite"><MaterialIcon materialId={4} label="铝" /> {resources[3]}</span>
           </div>
           <span><MaterialIcon materialId={7} label="开发资材" /></span>
           <span><MaterialIcon materialId={8} label="改修资材" /></span>
           <span>消费装备</span>
         </div>
-        {variants.map((variant) => <RecipeRow key={variant.id} variant={variant} inventory={inventory} equipmentIcons={equipmentIcons} />)}
+        {variants.map((variant, variantIndex) => <RecipeVariantBlock key={variantIndex} variant={variant} inventory={inventory} equipmentIcons={equipmentIcons} />)}
       </Collapse>
     </section>
   );
