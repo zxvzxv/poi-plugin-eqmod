@@ -1,6 +1,6 @@
 {
   "name": "poi-plugin-eqmod",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "description": "Poi equipment improvement recipe viewer",
   "poiPlugin": {
     "name": "装备改修",
