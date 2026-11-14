@@ -2,6 +2,10 @@
   "name": "poi-plugin-eqmod",
   "version": "0.2.0",
   "description": "Poi equipment improvement recipe viewer",
+  "poiPlugin": {
+    "name": "装备改修",
+    "description": "本地查询装备改修数据"
+  },
   "license": "MIT",
   "author": {
     "name": "zxvzxv",
